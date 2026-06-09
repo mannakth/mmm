@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تجربة المحرك الكهربائي التفاعلية ثلاثية الأبعاد</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
+        body { font-family: 'Tajawal', sans-serif; background-color: #0f172a; overflow: hidden; }
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+    </style>
+</head>
+<body class="w-screen h-screen relative flex m-0">
+
+    <div id="canvas-container" class="w-full h-full absolute inset-0 z-0"></div>
+
+    <div class="glass w-80 md:w-96 h-[92vh] my-[4vh] mr-6 rounded-2xl z-10 shadow-2xl flex flex-col justify-between p-6 overflow-y-auto text-white">
+        <div>
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center text-slate-900 shadow-lg shadow-amber-500/30">
+                    <i class="fa-solid fa-bolt text-xl animate-pulse"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-wide">المحرك الكهربائي</h1>
+                    <p class="text-xs text-slate-400">تحول الطاقة الكهربائية إلى حركية</p>
+                </div>
+            </div>
+            
+            <p class="text-sm text-slate-300 leading-relaxed mb-6 border-b border-slate-700 pb-4">
+                شاهد كيف يتفاعل <span class="text-amber-400 font-bold">التيار الكهربائي</span> المار في الملف السلكي مع <span class="text-cyan-400 font-bold">المجال المغناطيسي</span> لتوليد قوة لورنتز التي تدير المروحة.
+            </p>
+
+            <div class="space-y-6">
+                <div class="flex items-center justify-between bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                    <div>
+                        <span class="block font-medium text-sm">مفتاح الطاقة الرئيسي</span>
+                        <span id="status-text" class="text-xs text-rose-400 font-bold">مغلق الآن</span>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="power-switch" class="sr-only peer">
+                        <div class="w-14 h-7 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-emerald-500 shadow-inner"></div>
+                    </label>
+                </div>
+
+                <div class="space-y-2">
+                    <div class="flex justify-between text-sm">
+                        <span class="text-slate-300">الجهد الكهربائي (السرعة)</span>
+                        <span id="voltage-val" class="text-amber-400 font-bold">3.0 فولت</span>
+                    </div>
+                    <input type="range" id="voltage-slider" min="1" max="12" step="0.5" value="3" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500">
+                </div>
+
+                <div class="space-y-2">
+                    <span class="text-sm text-slate-300 block">اتجاه تيار البطارية</span>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="dir-forward" class="py-2 px-3 rounded-lg bg-indigo-600 font-medium text-xs border border-indigo-400 text-center transition-all shadow-md shadow-indigo-600/20">أمامي (+ / -)</button>
+                        <button id="dir-backward" class="py-2 px-3 rounded-lg bg-slate-800 font-medium text-xs border border-slate-700 text-center text-slate-400 transition-all hover:bg-slate-700">عكسي (- / +)</button>
+                    </div>
+                </div>
+
+                <div class="space-y-3 pt-2 border-t border-slate-700">
+                    <span class="text-xs text-slate-400 uppercase tracking-wider block">العناصر التوضيحية البصرية</span>
+                    
+                    <label class="flex items-center gap-3 cursor-pointer text-sm">
+                        <input type="checkbox" id="show-fields" checked class="w-4 h-4 rounded text-cyan-500 focus:ring-cyan-500 bg-slate-700 border-slate-600">
+                        <span>إظهار خطوط المجال المغناطيسي</span>
+                    </label>
+                    
+                    <label class="flex items-center gap-3 cursor-pointer text-sm">
+                        <input type="checkbox" id="show-electrons" checked class="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-slate-700 border-slate-600">
+                        <span>إظهار تدفق الإلكترونات (التيار)</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-6 space-y-4">
+            <div class="grid grid-cols-2 gap-2">
+                <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800 text-center">
+                    <span class="block text-[10px] text-slate-400">سرعة الدوران</span>
+                    <span id="rpm-display" class="text-lg font-bold text-cyan-400">0 <span class="text-xs font-normal text-slate-400">دورة/د</span></span>
+                </div>
+                <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800 text-center">
+                    <span class="block text-[10px] text-slate-400">كفاءة التحويل</span>
+                    <span id="efficiency-display" class="text-lg font-bold text-emerald-400">0%</span>
+                </div>
+            </div>
+
+            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 text-xs space-y-2">
+                <span class="text-slate-400 block text-center">مخطط تحول الطاقة الديناميكي</span>
+                <div class="flex items-center justify-between px-2">
+                    <span class="text-amber-400 font-bold">كهربائية ⚡</span>
+                    <i class="fa-solid fa-arrow-left-long text-slate-500 animate-pulse"></i>
+                    <span id="kinetic-label" class="text-slate-500 transition-all font-bold">حركية 🌀</span>
+                </div>
+                <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden flex">
+                    <div id="energy-bar-elec" class="bg-amber-500 w-0 transition-all duration-300"></div>
+                    <div id="energy-bar-kin" class="bg-cyan-500 w-0 transition-all duration-300"></div>
+                </div>
+            </div>
+            
+            <div class="text-[10px] text-slate-500 text-center">
+                يمكنك سحب وتدوير المحرك بالماوس/اللمس لرؤيته من زوايا مختلفة.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. إعداد المتغيرات الأساسية والحالة ---
+        let scene, camera, renderer, controls;
+        let coilGroup, fanGroup, electronParticles = [], fieldLines = [];
+        
+        const state = {
+            isPowerOn: false,
+            voltage: 3.0,
+            direction: 1, // 1 لليمين، -1 لليسار
+            showFields: true,
+            showElectrons: true,
+            currentSpeed: 0,
+            targetSpeed: 0,
+            angle: 0
+        };
+
+        // عناصر واجهة المستخدم للربط والتحديث
+        const powerSwitch = document.getElementById('power-switch');
+        const statusText = document.getElementById('status-text');
+        const voltageSlider = document.getElementById('voltage-slider');
+        const voltageVal = document.getElementById('voltage-val');
+        const dirForward = document.getElementById('dir-forward');
+        const dirBackward = document.getElementById('dir-backward');
+        const showFieldsCheck = document.getElementById('show-fields');
+        const showElectronsCheck = document.getElementById('show-electrons');
+        const rpmDisplay = document.getElementById('rpm-display');
+        const efficiencyDisplay = document.getElementById('efficiency-display');
+        const kineticLabel = document.getElementById('kinetic-label');
+        const energyBarElec = document.getElementById('energy-bar-elec');
+        const energyBarKin = document.getElementById('energy-bar-kin');
+
+        // --- 2. تهيئة المشهد ثلاثي الأبعاد ---
+        function init3D() {
+            const container = document.getElementById('canvas-container');
+            
+            // إنشاء المشهد مع إضاءة فضاء النيون المحيطة
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0f172a);
+            scene.fog = new THREE.FogExp2(0x0f172a, 0.015);
+
+            // الكاميرا
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.set(0, 5, 10);
+
+            // الصيرفة والإخراج
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            // التحكم في الكاميرا
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxPolarAngle = Math.PI / 2 + 0.1; // منع النزول أسفل الأرضية تماماً
+
+            // الإضاءة للمشهد
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(5, 10, 7);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            const pointLight = new THREE.PointLight(0x38bdf8, 1, 15);
+            pointLight.position.set(0, 2, 0);
+            scene.add(pointLight);
+
+            // إنشاء مكونات المحرك الفيزيائي
+            createEnvironment();
+            createMotorStaticParts();
+            createMotorRotationalParts();
+            createFieldLines();
+            createElectronCircuit();
+
+            // الاستجابة لتغير حجم النافذة
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        // --- 3. بناء مجسمات وعناصر المحرك ---
+        
+        function createEnvironment() {
+            // منصة خشبية أو زجاجية سفلية كقاعدة للمحرك
+            const baseGeo = new THREE.BoxGeometry(8, 0.3, 6);
+            const baseMat = new THREE.MeshStandardMaterial({ 
+                color: 0x1e293b, 
+                roughness: 0.4, 
+                metalness: 0.2 
+            });
+            const base = new THREE.Mesh(baseGeo, baseMat);
+            base.position.y = -0.15;
+            base.receiveShadow = true;
+            scene.add(base);
+
+            // شبكة تقنية أرضية مظهرها رائع
+            const grid = new THREE.GridHelper(20, 20, 0x334155, 0x1e293b);
+            grid.position.y = -0.29;
+            scene.add(grid);
+        }
+
+        function createMotorStaticParts() {
+            // المغناطيس الأيمن (القطب الشمالي - أحمر)
+            const magGeo = new THREE.BoxGeometry(1.5, 2, 3);
+            const northMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.2, metalness: 0.8 });
+            const magnetNorth = new THREE.Mesh(magGeo, northMat);
+            magnetNorth.position.set(2.8, 1, 0);
+            scene.add(magnetNorth);
+
+            // علامة القطب الشمالي N
+            createLabel("N", 0xffffff, 1.9, 1, 0);
+
+            // المغناطيس الأيسر (القطب الجنوبي - أزرق)
+            const southMat = new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.2, metalness: 0.8 });
+            const magnetSouth = new THREE.Mesh(magGeo, southMat);
+            magnetSouth.position.set(-2.8, 1, 0);
+            scene.add(magnetSouth);
+
+            // علامة القطب الجنوبي S
+            createLabel("S", 0xffffff, -1.9, 1, 0);
+
+            // القواعد الحاملة للمحور الدوار
+            const standGeo = new THREE.BoxGeometry(0.3, 1.8, 0.5);
+            const standMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.9, roughness: 0.1 });
+            
+            const standBack = new THREE.Mesh(standGeo, standMat);
+            standBack.position.set(0, 0.9, -1.8);
+            scene.add(standBack);
+
+            const standFront = new THREE.Mesh(standGeo, standMat);
+            standFront.position.set(0, 0.9, 1.8);
+            scene.add(standFront);
+            
+            // بطارية توضيحية جانبية صغيرة كمصدر طاقة كهربائية
+            const batGeo = new THREE.CylinderGeometry(0.4, 0.4, 1.5, 16);
+            const batMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.7, roughness: 0.3 });
+            const battery = new THREE.Mesh(batGeo, batMat);
+            battery.rotation.z = Math.PI / 2;
+            battery.position.set(0, 0.2, 2.5);
+            scene.add(battery);
+        }
+
+        function createMotorRotationalParts() {
+            // مجموعة الملف والمروحة التي ستدور معاً
+            coilGroup = new THREE.Group();
+            coilGroup.position.set(0, 1, 0);
+            scene.add(coilGroup);
+
+            // محور الدوران المركزي (قضيب معدني رفيع)
+            const shaftGeo = new THREE.CylinderGeometry(0.08, 0.08, 4.2, 16);
+            const shaftMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.95, roughness: 0.05 });
+            const shaft = new THREE.Mesh(shaftGeo, shaftMat);
+            shaft.rotation.x = Math.PI / 2;
+            coilGroup.add(shaft);
+
+            // إنشاء ملف سلكي نحاسي (مستطيل مفرغ يدور)
+            const wireMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xb45309, // لون نحاسي لامع جداً
+                metalness: 0.9, 
+                roughness: 0.1 
+            });
+
+            const wireThickness = 0.07;
+            const wWidth = 1.6;
+            const wLength = 2.4;
+
+            // بناء أضلاع مستطيل الملف الأربعة حول المحور
+            const side1 = new THREE.Mesh(new THREE.CylinderGeometry(wireThickness, wireThickness, wLength, 16), wireMaterial);
+            side1.position.set(wWidth/2, 0, 0);
+            side1.rotation.x = Math.PI / 2;
+            coilGroup.add(side1);
+
+            const side2 = new THREE.Mesh(new THREE.CylinderGeometry(wireThickness, wireThickness, wLength, 16), wireMaterial);
+            side2.position.set(-wWidth/2, 0, 0);
+            side2.rotation.x = Math.PI / 2;
+            coilGroup.add(side2);
+
+            const side3 = new THREE.Mesh(new THREE.CylinderGeometry(wireThickness, wireThickness, wWidth, 16), wireMaterial);
+            side3.position.set(0, 0, wLength/2);
+            side3.rotation.z = Math.PI / 2;
+            coilGroup.add(side3);
+
+            const side4 = new THREE.Mesh(new THREE.CylinderGeometry(wireThickness, wireThickness, wWidth, 16), wireMaterial);
+            side4.position.set(0, 0, -wLength/2);
+            side4.rotation.z = Math.PI / 2;
+            coilGroup.add(side4);
+
+            // المروحة المتصلة في مقدمة المحور الخارجي
+            fanGroup = new THREE.Group();
+            fanGroup.position.set(0, 0, 2.1); // توضع في الطرف الأمامي للمحور
+            coilGroup.add(fanGroup);
+
+            // مركز المروحة الدائري
+            const hubGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.2, 32);
+            const hubMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.5 });
+            const hub = new THREE.Mesh(hubGeo, hubMat);
+            hub.rotation.x = Math.PI / 2;
+            fanGroup.add(hub);
+
+            // شفرات المروحة الـ 4 البلاستيكية الرشيقة
+            const bladeGeo = new THREE.BoxGeometry(0.3, 1.3, 0.03);
+            const bladeMat = new THREE.MeshStandardMaterial({ 
+                color: 0x06b6d4, // شفرات بلون مائي سيان شفاف قليلاً ومضيء
+                transparent: true,
+                opacity: 0.85,
+                roughness: 0.2 
+            });
+
+            for(let i=0; i<4; i++) {
+                const bladeHolder = new THREE.Group();
+                bladeHolder.rotation.z = (Math.PI / 2) * i;
+                
+                const blade = new THREE.Mesh(bladeGeo, bladeMat);
+                blade.position.y = 0.75;
+                blade.rotation.y = 0.3; // زاوية الشفرة لتبدو مروحية حقيقية تدفع الهواء
+                
+                bladeHolder.add(blade);
+                fanGroup.add(bladeHolder);
+            }
+        }
+
+        function createFieldLines() {
+            // بناء خطوط مجالية نيونية تخرج من الشمالي للجنوبي تفاعلياً
+            const lineCount = 7;
+            const lineMat = new THREE.LineBasicMaterial({ 
+                color: 0x22d3ee, 
+                transparent: true, 
+                opacity: 0.4,
+                blending: THREE.AdditiveBlending 
+            });
+
+            for(let i=0; i<lineCount; i++) {
+                const yPos = 0.4 + (i * 0.2);
+                for(let j=0; j<3; j++) {
+                    const zPos = -1.0 + (j * 1.0);
+                    const points = [];
+                    points.push(new THREE.Vector3(1.9, yPos, zPos));
+                    points.push(new THREE.Vector3(-1.9, yPos, zPos));
+
+                    const geo = new THREE.BufferGeometry().setFromPoints(points);
+                    const line = new THREE.Line(geo, lineMat);
+                    scene.add(line);
+                    fieldLines.push(line);
+                }
+            }
+        }
+
+        function createElectronCircuit() {
+            // تصميم مسار وهمي لجزيئات تيار نيون كهربائي حول السلك والبطارية
+            const particleGeo = new THREE.SphereGeometry(0.04, 8, 8);
+            const particleMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b });
+
+            // سننشئ 16 إلكتروناً يتحركون باستمرار داخل مسار مستطيل الملف عند التشغيل
+            for (let i = 0; i < 20; i++) {
+                const p = new THREE.Mesh(particleGeo, particleMat);
+                p.userData = { progress: i / 20 }; // تقدم الجسيم في المسار من 0 لـ 1
+                scene.add(p);
+                electronParticles.push(p);
+            }
+        }
+
+        // دالة مساعدة لعمل نصوص ثلاثية أبعاد بسيطة على جدران المغناطيس
+        function createLabel(text, color, x, y, z) {
+            // نظراً لعدم توفر فونت جيسون خارجي مباشر، سنستخدم لوحة كانفاس مسطحة كملمس ملصق ذكي ثلاثي الأبعاد
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = text === "N" ? "#ef4444" : "#3b82f6";
+            ctx.fillRect(0,0,64,64);
+            ctx.font = 'bold 40px Tajawal, sans-serif';
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 32, 32);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const mat = new THREE.MeshBasicMaterial({ map: texture });
+            const geo = new THREE.PlaneGeometry(0.6, 0.6);
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x, y, z);
+            mesh.rotation.y = text === "N" ? -Math.PI/2 : Math.PI/2;
+            scene.add(mesh);
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('canvas-container');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        // --- 4. معالجة الأحداث والتحكم التفاعلي في الواجهة (UI Events) ---
+
+        powerSwitch.addEventListener('change', (e) => {
+            state.isPowerOn = e.target.checked;
+            if(state.isPowerOn) {
+                statusText.innerText = "يعمل الآن بكفاءة";
+                statusText.className = "text-xs text-emerald-400 font-bold";
+                kineticLabel.className = "text-cyan-400 font-bold animate-bounce";
+                energyBarElec.style.width = "50%";
+                energyBarKin.style.width = "50%";
+            } else {
+                statusText.innerText = "مغلق الآن";
+                statusText.className = "text-xs text-rose-400 font-bold";
+                kineticLabel.className = "text-slate-500 font-bold";
+                energyBarElec.style.width = "0%";
+                energyBarKin.style.width = "0%";
+            }
+        });
+
+        voltageSlider.addEventListener('input', (e) => {
+            state.voltage = parseFloat(e.target.value);
+            voltageVal.innerText = state.voltage.toFixed(1) + " فولت";
+        });
+
+        dirForward.addEventListener('click', () => {
+            state.direction = 1;
+            dirForward.className = "py-2 px-3 rounded-lg bg-indigo-600 font-medium text-xs border border-indigo-400 text-center text-white transition-all shadow-md shadow-indigo-600/20";
+            dirBackward.className = "py-2 px-3 rounded-lg bg-slate-800 font-medium text-xs border border-slate-700 text-center text-slate-400 transition-all hover:bg-slate-700";
+        });
+
+        dirBackward.addEventListener('click', () => {
+            state.direction = -1;
+            dirBackward.className = "py-2 px-3 rounded-lg bg-indigo-600 font-medium text-xs border border-indigo-400 text-center text-white transition-all shadow-md shadow-indigo-600/20";
+            dirForward.className = "py-2 px-3 rounded-lg bg-slate-800 font-medium text-xs border border-slate-700 text-center text-slate-400 transition-all hover:bg-slate-700";
+        });
+
+        showFieldsCheck.addEventListener('change', (e) => {
+            state.showFields = e.target.checked;
+            fieldLines.forEach(l => l.visible = state.showFields);
+        });
+
+        showElectronsCheck.addEventListener('change', (e) => {
+            state.showElectrons = e.target.checked;
+            electronParticles.forEach(p => p.visible = state.showElectrons);
+        });
+
+
+        // --- 5. حلقة التحديث والحركة الفيزيائية المستمرة (Animation Loop) ---
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // أ) حساب سرعة الدوران والقصور الذاتي المستند للجهد والاتجاه
+            if (state.isPowerOn) {
+                // السرعة المستهدفة مبنية على قيمة الجهد وعامل الاتجاه
+                state.targetSpeed = (state.voltage / 12) * 0.18 * state.direction;
+            } else {
+                // تباطؤ تدريجي محاكي للاحتكاك الطبيعي للهواء والملف عند الإيقاف
+                state.targetSpeed = 0;
+            }
+            
+            // معادلة تقارب السرعة الحالية نحو المستهدفة بسلاسة فيزيائية عالية (Damping)
+            state.currentSpeed += (state.targetSpeed - state.currentSpeed) * 0.04;
+            
+            // تطبيق الدوران الفعلي للملف المروحة حول المحور Z
+            state.angle += state.currentSpeed;
+            coilGroup.rotation.z = state.angle;
+
+            // ب) تحديث العدادات الرقمية للوحة التحكم الجانبية بالـ RPM والكفاءة
+            const calculatedRPM = Math.abs(Math.round(state.currentSpeed * 60 * 10));
+            rpmDisplay.innerHTML = `${calculatedRPM} <span class="text-xs font-normal text-slate-400">دورة/د</span>`;
+            
+            const efficiency = state.isPowerOn ? Math.round(82 + (state.voltage * 1.2)) : 0;
+            efficiencyDisplay.innerText = `${efficiency}%`;
+
+            // ج) تحريك تيار النيون للإلكترونات داخل الملف السلكي التفاعلي
+            if(state.showElectrons) {
+                const wWidth = 1.6;
+                const wLength = 2.4;
+                
+                electronParticles.forEach((p, idx) => {
+                    if (state.isPowerOn) {
+                        // سرعة الإلكترونات متطابقة مع الجهد والاتجاه الحالي
+                        p.userData.progress += (state.voltage * 0.002) * state.direction;
+                        if (p.userData.progress > 1) p.userData.progress -= 1;
+                        if (p.userData.progress < 0) p.userData.progress += 1;
+                    }
+                    
+                    let prog = p.userData.progress;
+                    let localX = 0, localZ = 0, localY = 0;
+                    
+                    // تحويل التقدم المئوي لخط مسار مستطيل يدور مع الملف ثلاثي الأبعاد
+                    if (prog < 0.25) { // الضلع الأول
+                        localX = wWidth / 2;
+                        localZ = -wLength / 2 + (prog / 0.25) * wLength;
+                    } else if (prog < 0.5) { // الضلع الثاني
+                        let p2 = (prog - 0.25) / 0.25;
+                        localX = wWidth / 2 - p2 * wWidth;
+                        localZ = wLength / 2;
+                    } else if (prog < 0.75) { // الضلع الثالث
+                        let p3 = (prog - 0.5) / 0.25;
+                        localX = -wWidth / 2;
+                        localZ = wLength / 2 - p3 * wLength;
+                    } else { // الضلع الرابع والأخير
+                        let p4 = (prog - 0.75) / 0.25;
+                        localX = -wWidth / 2 + p4 * wWidth;
+                        localZ = -wLength / 2;
+                    }
+                    
+                    // حساب الموضع الفراغي الفعلي للإلكترون متأثراً بزاوية دوران المحرك الحالية
+                    const rotX = localX * Math.cos(state.angle) - localY * Math.sin(state.angle);
+                    const rotY = localX * Math.sin(state.angle) + localY * Math.cos(state.angle);
+                    
+                    p.position.set(rotX, rotY + 1, localZ);
+                });
+            }
+
+            // د) إضفاء حركة موجية خفيفة على خطوط المجال المغناطيسي لمحاكاة الطاقة غير المرئية
+            if(state.showFields && state.isPowerOn) {
+                fieldLines.forEach((l, i) => {
+                    l.material.opacity = 0.3 + Math.sin(Date.now() * 0.005 + i) * 0.15;
+                });
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // --- 6. تشغيل النظام لأول مرة عند تحميل الصفحة ---
+        window.onload = () => {
+            init3D();
+            animate();
+        };
+    </script>
+</body>
+</html>

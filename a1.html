@@ -1,0 +1,464 @@
+```html
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>محاكاة المولد الكهربائي</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%);
+            font-family: 'Cairo', sans-serif;
+            color: #1e293b;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+        }
+        
+        /* اللوحة الجانبية المصغرة على اليمين */
+        .sidebar {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 320px; /* تقليل العرض */
+            pointer-events: auto;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            border-radius: 1rem;
+            padding: 1.25rem; /* تقليل الحشو */
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem; /* تقليل المسافة بين العناصر */
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+        }
+
+        .sidebar::-webkit-scrollbar { width: 4px; }
+        .sidebar::-webkit-scrollbar-track { background: transparent; }
+        .sidebar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+        h1 { font-weight: 800; font-size: 1.25rem !important; }
+        
+        /* شريط التمرير */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            margin: 8px 0;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 8px;
+            cursor: pointer;
+            background: #e2e8f0;
+            border-radius: 4px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: #2563eb;
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -8px;
+            border: 3px solid white;
+            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.4);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.1); }
+
+        /* إحصائيات مصغرة */
+        .compact-stat {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0.75rem;
+            background: #f8fafc;
+            border-radius: 0.5rem;
+            border: 1px solid #e2e8f0;
+        }
+
+        .highlight-glow { text-shadow: 0 0 10px rgba(234, 179, 8, 0.6); }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 20;
+            background: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            font-size: 1rem;
+            font-weight: 600;
+            color: #2563eb;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #bfdbfe;
+            border-top: 2px solid #2563eb;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .color-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        @media (max-width: 640px) {
+            .sidebar {
+                width: calc(100% - 20px);
+                top: 10px;
+                right: 10px;
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loading">
+        <div class="spinner"></div>
+        <span>جاري التحميل...</span>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-layer">
+        <!-- اللوحة الجانبية المصغرة -->
+        <div class="sidebar">
+            
+            <!-- الترويسة المبسطة -->
+            <div class="flex items-center gap-2 mb-1">
+                <div class="text-blue-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                </div>
+                <h1 class="text-slate-800 m-0">المولد الكهربائي</h1>
+            </div>
+            <p class="text-slate-500 text-xs leading-relaxed m-0">
+                حوّل <span class="text-blue-600 font-bold">الطاقة الحركية</span> إلى <span class="text-yellow-600 font-bold">طاقة كهربائية</span> عن طريق الحث الكهرومغناطيسي.
+            </p>
+
+            <hr class="border-slate-100 my-1">
+
+            <!-- لوحة التحكم -->
+            <div>
+                <label class="block text-sm font-bold text-slate-700 mb-2">الطاقة الحركية (السرعة)</label>
+                <div class="flex items-center gap-2">
+                    <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16a2 2 0 002 2h2a2 2 0 002-2v-4c0-2.828 2.828-5 5-5z"></path></svg>
+                    <input type="range" id="speedSlider" min="0" max="100" value="0">
+                    <svg class="w-4 h-4 text-blue-500 animate-spin shrink-0" style="animation-duration: 3s;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                </div>
+            </div>
+
+            <!-- الإحصائيات (أفقية ومدمجة) -->
+            <div class="flex flex-col gap-2">
+                <div class="compact-stat">
+                    <span class="text-xs font-semibold text-slate-500">طاقة حركية</span>
+                    <span class="text-lg font-bold text-blue-600 font-mono" id="kinetic-value">0%</span>
+                </div>
+                
+                <div class="flex justify-center -my-2 z-10 relative">
+                    <svg class="w-5 h-5 text-slate-300 bg-white rounded-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
+                </div>
+
+                <div class="compact-stat bg-yellow-50 border-yellow-100">
+                    <span class="text-xs font-semibold text-slate-500">طاقة كهربائية</span>
+                    <span class="text-lg font-bold text-yellow-600 font-mono highlight-glow" id="electric-value">0%</span>
+                </div>
+            </div>
+
+            <hr class="border-slate-100 my-1">
+
+            <!-- مفتاح الشرح المصغر -->
+            <div class="text-xs">
+                <div class="grid grid-cols-2 gap-2 text-slate-600 font-medium">
+                    <div class="flex items-center gap-1.5"><span class="color-dot bg-red-500"></span> قطب N</div>
+                    <div class="flex items-center gap-1.5"><span class="color-dot bg-blue-500"></span> قطب S</div>
+                    <div class="flex items-center gap-1.5"><span class="color-dot bg-amber-600"></span> ملف نحاسي</div>
+                    <div class="flex items-center gap-1.5"><span class="color-dot bg-cyan-400"></span> إلكترونات</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0xf0fdf4, 0.015);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        // تعديل موضع الكاميرا لتناسب اللوحة الأصغر
+        camera.position.set(-6, 16, 35); 
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 10;
+        controls.maxDistance = 60;
+        controls.target.set(-2, 3, 0);
+
+        document.getElementById('loading').style.display = 'none';
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7); 
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        directionalLight.position.set(10, 25, 20);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 2048; 
+        directionalLight.shadow.mapSize.height = 2048;
+        scene.add(directionalLight);
+
+        const fillLight = new THREE.DirectionalLight(0xe0f2fe, 0.5);
+        fillLight.position.set(-15, 10, -15);
+        scene.add(fillLight);
+
+        // إضاءة المصباح
+        const bulbLight = new THREE.PointLight(0xfff5b3, 0, 50);
+        bulbLight.position.set(12, 4, 0); 
+        scene.add(bulbLight);
+
+
+        // --- بناء المجسمات ---
+        const baseGeo = new THREE.CylinderGeometry(16, 17, 0.8, 64);
+        const baseMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0.1 });
+        const base = new THREE.Mesh(baseGeo, baseMat);
+        base.position.set(-2, -0.4, 0);
+        base.receiveShadow = true;
+        scene.add(base);
+        
+        const magnetGroup = new THREE.Group();
+        magnetGroup.position.set(-4, 0, 0);
+        scene.add(magnetGroup);
+
+        const magnetGeo = new THREE.BoxGeometry(2.5, 7, 7);
+        
+        const northMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.4 });
+        const northPole = new THREE.Mesh(magnetGeo, northMat);
+        northPole.position.set(-5, 3.5, 0);
+        northPole.castShadow = true;
+        magnetGroup.add(northPole);
+
+        const southMat = new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.4 });
+        const southPole = new THREE.Mesh(magnetGeo, southMat);
+        southPole.position.set(5, 3.5, 0);
+        southPole.castShadow = true;
+        magnetGroup.add(southPole);
+
+        // خطوط المجال
+        const fieldGeo = new THREE.CylinderGeometry(0.02, 0.02, 8, 8);
+        const fieldMat = new THREE.MeshBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.3 });
+        for(let i=0; i<3; i++) {
+            for(let j=0; j<3; j++) {
+                const line = new THREE.Mesh(fieldGeo, fieldMat);
+                line.rotation.z = Math.PI / 2;
+                line.position.set(0, 2.5 + i*1, -1 + j*1);
+                magnetGroup.add(line);
+            }
+        }
+
+        const rotorGroup = new THREE.Group();
+        rotorGroup.position.set(-4, 3.5, 0);
+        scene.add(rotorGroup);
+
+        const shaftGeo = new THREE.CylinderGeometry(0.2, 0.2, 12, 16);
+        const shaftMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.8 });
+        const shaft = new THREE.Mesh(shaftGeo, shaftMat);
+        shaft.rotation.x = Math.PI / 2;
+        shaft.castShadow = true;
+        rotorGroup.add(shaft);
+
+        const coilMat = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.6, roughness: 0.4 });
+        const wireGeo = new THREE.CylinderGeometry(0.15, 0.15, 5, 16);
+        const side1 = new THREE.Mesh(wireGeo, coilMat);
+        side1.position.set(0, 2, 0);
+        side1.rotation.z = Math.PI / 2;
+        rotorGroup.add(side1);
+
+        const side2 = new THREE.Mesh(wireGeo, coilMat);
+        side2.position.set(0, -2, 0);
+        side2.rotation.z = Math.PI / 2;
+        rotorGroup.add(side2);
+
+        const crossGeo = new THREE.CylinderGeometry(0.15, 0.15, 4, 16);
+        const cross1 = new THREE.Mesh(crossGeo, coilMat);
+        cross1.position.set(2.5, 0, 0);
+        rotorGroup.add(cross1);
+
+        const cross2 = new THREE.Mesh(crossGeo, coilMat);
+        cross2.position.set(-2.5, 0, 0);
+        rotorGroup.add(cross2);
+
+        // المصباح
+        const bulbGroup = new THREE.Group();
+        bulbGroup.position.set(6, 0, 0); 
+        scene.add(bulbGroup);
+
+        const socketGeo = new THREE.CylinderGeometry(1, 1, 1.2, 32);
+        const socketMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.7 });
+        const socket = new THREE.Mesh(socketGeo, socketMat);
+        socket.position.y = 0.6;
+        socket.castShadow = true;
+        bulbGroup.add(socket);
+
+        const glassGeo = new THREE.SphereGeometry(1.8, 32, 32);
+        const glassMat = new THREE.MeshPhysicalMaterial({
+            color: 0xffffff, metalness: 0.1, roughness: 0,
+            transmission: 0.99, thickness: 0.1, transparent: true
+        });
+        const glass = new THREE.Mesh(glassGeo, glassMat);
+        glass.position.y = 3;
+        bulbGroup.add(glass);
+
+        const filamentGeo = new THREE.TorusGeometry(0.5, 0.06, 16, 32);
+        const filamentMat = new THREE.MeshStandardMaterial({ color: 0x451a03, emissive: 0xffe600, emissiveIntensity: 0 });
+        const filament = new THREE.Mesh(filamentGeo, filamentMat);
+        filament.position.y = 3;
+        filament.rotation.x = Math.PI / 2;
+        bulbGroup.add(filament);
+
+        // الأسلاك
+        const wireMatObj = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.6 });
+        const wireCurve1 = new THREE.CatmullRomCurve3([
+            new THREE.Vector3(-4, 3.5, -4), new THREE.Vector3(-4, 0.1, -4), new THREE.Vector3(6, 0.1, -4), new THREE.Vector3(6, 0.1, -1)  
+        ]);
+        const wireCurve2 = new THREE.CatmullRomCurve3([
+            new THREE.Vector3(-4, 3.5, -5), new THREE.Vector3(-5, 0.1, -5), new THREE.Vector3(7.5, 0.1, -5), new THREE.Vector3(7.5, 0.1, 0), new THREE.Vector3(7, 0.1, 0)
+        ]);
+
+        scene.add(new THREE.Mesh(new THREE.TubeGeometry(wireCurve1, 64, 0.1, 8, false), wireMatObj));
+        scene.add(new THREE.Mesh(new THREE.TubeGeometry(wireCurve2, 64, 0.1, 8, false), wireMatObj));
+
+        // الإلكترونات
+        const electronGeo = new THREE.SphereGeometry(0.2, 12, 12);
+        const electronMat = new THREE.MeshBasicMaterial({ color: 0x06b6d4 }); 
+        const electrons1 = [], electrons2 = [];
+        const numElectrons = 15;
+
+        for(let i=0; i<numElectrons; i++) {
+            const el1 = new THREE.Mesh(electronGeo, electronMat);
+            const el2 = new THREE.Mesh(electronGeo, electronMat);
+            scene.add(el1); scene.add(el2);
+            electrons1.push({ mesh: el1, progress: i / numElectrons });
+            electrons2.push({ mesh: el2, progress: i / numElectrons });
+        }
+
+
+        // --- المنطق ---
+        const speedSlider = document.getElementById('speedSlider');
+        const kineticLabel = document.getElementById('kinetic-value');
+        const electricLabel = document.getElementById('electric-value');
+
+        let currentSpeed = 0, targetSpeed = 0, rotationAngle = 0;
+
+        function updatePhysics() {
+            targetSpeed = parseInt(speedSlider.value) / 100; 
+            kineticLabel.textContent = `${Math.round(targetSpeed * 100)}%`;
+            currentSpeed += (targetSpeed - currentSpeed) * 0.05;
+            
+            const electricPower = currentSpeed; 
+            electricLabel.textContent = `${Math.round(electricPower * 100)}%`;
+
+            filamentMat.emissiveIntensity = electricPower * 25; 
+            bulbLight.intensity = electricPower * 100; 
+            bulbLight.position.set(6, 3, 0);
+            
+            const offColor = new THREE.Color(0x451a03);
+            const fullColor = new THREE.Color(0xffffee); 
+            filamentMat.color.lerpColors(offColor, fullColor, electricPower);
+            filamentMat.emissive.lerpColors(offColor, fullColor, electricPower);
+        }
+
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            updatePhysics();
+
+            rotationAngle += currentSpeed * 12 * delta;
+            rotorGroup.rotation.z = rotationAngle;
+
+            const electronSpeed = currentSpeed * 1.2 * delta;
+            
+            electrons1.forEach(el => {
+                el.progress += electronSpeed;
+                if(el.progress > 1) el.progress -= 1;
+                el.mesh.scale.setScalar(currentSpeed > 0.01 ? (0.5 + currentSpeed*0.5) : 0.01);
+                el.mesh.position.copy(wireCurve1.getPointAt(el.progress));
+            });
+
+            electrons2.forEach(el => {
+                el.progress -= electronSpeed; 
+                if(el.progress < 0) el.progress += 1;
+                el.mesh.scale.setScalar(currentSpeed > 0.01 ? (0.5 + currentSpeed*0.5) : 0.01);
+                el.mesh.position.copy(wireCurve2.getPointAt(el.progress));
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
+
+```

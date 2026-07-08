@@ -218,6 +218,25 @@
           <!-- Metric Cards will be dynamically rendered & ordered here -->
         </div>
 
+        <!-- Sector average comparison + PEG panel -->
+        <div class="analysis-row">
+          <div class="card-white sector-compare-card">
+            <h3 data-key="sector_compare_title">🏭 مقارنة السهم بمتوسط القطاع</h3>
+            <p class="sector-compare-subtitle" id="sector-compare-subtitle">قطاع الطاقة</p>
+            <div class="sector-compare-grid" id="sector-compare-grid">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+
+          <div class="card-white peg-card">
+            <h3 data-key="peg_title">📐 مؤشر PEG (السعر إلى النمو)</h3>
+            <div class="peg-grid" id="peg-grid">
+              <!-- Populated dynamically -->
+            </div>
+            <p class="peg-hint" data-key="peg_hint">أقل من 1: تقييم جذاب · بين 1-2: تقييم عادل · أكبر من 2: تقييم مرتفع نسبة إلى النمو</p>
+          </div>
+        </div>
+
         <!-- Metric definitions help info -->
         <div class="quick-info-box">
           <h3 data-key="info_box_title">💡 دليل قراءة المؤشرات المالية</h3>
@@ -259,6 +278,23 @@
           <!-- Tabular data -->
           <div class="table-responsive">
             <table class="financial-table" id="history-table">
+              <thead>
+                <!-- Populated dynamically -->
+              </thead>
+              <tbody>
+                <!-- Populated dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Quarterly YoY comparison table -->
+        <div class="card-white">
+          <div class="card-header">
+            <h2 data-key="quarterly_compare_title">مقارنة الأرباع (سنوياً لكل ربع مماثل)</h2>
+          </div>
+          <div class="table-responsive">
+            <table class="financial-table" id="quarterly-compare-table">
               <thead>
                 <!-- Populated dynamically -->
               </thead>
@@ -367,6 +403,25 @@
     </main>
   </div>
   
+  <!-- Metric history popup modal -->
+  <div id="metric-modal-overlay" class="modal-overlay" style="display:none;">
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="metric-modal-title">
+      <div class="modal-header">
+        <h3 id="metric-modal-title">-</h3>
+        <button id="metric-modal-close" class="modal-close-btn" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-chart-container">
+        <canvas id="metricHistoryChart"></canvas>
+      </div>
+      <div class="table-responsive">
+        <table class="financial-table" id="metric-modal-table">
+          <thead><!-- Populated dynamically --></thead>
+          <tbody><!-- Populated dynamically --></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- Custom interactive toast notification -->
   <div id="toast-notif" class="toast-container" role="alert" aria-live="assertive">
     <div class="toast-body">

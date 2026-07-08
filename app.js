@@ -45,6 +45,15 @@ const translations = {
     market_open: "مفتوح",
     market_closed: "مغلق",
     favorites_title: "⭐ المفضلة",
+    sector_compare_title: "🏭 مقارنة السهم بمتوسط القطاع",
+    peg_title: "📐 مؤشر PEG (السعر إلى النمو)",
+    peg_hint: "أقل من 1: تقييم جذاب · بين 1-2: تقييم عادل · أكبر من 2: تقييم مرتفع نسبة إلى النمو",
+    peg_1y: "PEG (سنة واحدة)",
+    peg_3y: "PEG (3 سنوات)",
+    peg_na: "غير قابل للحساب (نمو سالب/معدوم)",
+    quarterly_compare_title: "مقارنة الأرباع (سنوياً لكل ربع مماثل)",
+    yoy_change: "التغير السنوي",
+    metric_history_title: "التاريخ المالي لخمس سنوات",
     
     // Metric names and descriptions
     eps: { name: "ربحية السهم (EPS)", desc: "صافي أرباح الشركة مقسوماً على عدد الأسهم" },
@@ -106,6 +115,15 @@ const translations = {
     market_open: "Open",
     market_closed: "Closed",
     favorites_title: "⭐ Favorites",
+    sector_compare_title: "🏭 Sector Average Comparison",
+    peg_title: "📐 PEG Ratio (Price/Earnings to Growth)",
+    peg_hint: "Below 1: Attractive value · 1-2: Fair value · Above 2: Expensive relative to growth",
+    peg_1y: "PEG (1 Year)",
+    peg_3y: "PEG (3 Years)",
+    peg_na: "N/A (negative/zero growth)",
+    quarterly_compare_title: "Quarterly Comparison (YoY per matching quarter)",
+    yoy_change: "YoY Change",
+    metric_history_title: "5-Year Financial History",
     
     // Metric names and descriptions
     eps: { name: "Earnings Per Share (EPS)", desc: "Company's net profit divided by outstanding shares" },
@@ -333,6 +351,21 @@ function setupEventListeners() {
     favoriteBtn.addEventListener("click", () => toggleFavorite(currentCompanyId));
   }
 
+  // Metric history modal close handlers
+  const metricModalClose = document.getElementById("metric-modal-close");
+  const metricModalOverlay = document.getElementById("metric-modal-overlay");
+  if (metricModalClose && metricModalOverlay) {
+    metricModalClose.addEventListener("click", closeMetricHistoryModal);
+    metricModalOverlay.addEventListener("click", (e) => {
+      if (e.target === metricModalOverlay) closeMetricHistoryModal();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && metricModalOverlay.style.display === "flex") {
+        closeMetricHistoryModal();
+      }
+    });
+  }
+
   // Manual integration force update button
   document.getElementById("sync-now-btn").addEventListener("click", () => {
     triggerManualSync();
@@ -558,7 +591,10 @@ function updateUI() {
 
   // Tab views renderers
   renderMetricsGrid(stock, dict);
+  renderSectorComparison(stock, dict);
+  renderPegPanel(stock, dict);
   renderHistoryTable(stock, dict);
+  renderQuarterlyCompareTable(stock, dict);
   renderDividendsSection(stock, dict);
   renderCompanyNewsList(stock);
   renderCustomizeSwitches(dict);
@@ -604,6 +640,177 @@ function renderFavoritesList() {
   });
 }
 
+// Render sector average comparison panel: stock's own PE/ROE/NPM vs sector average
+function renderSectorComparison(stock, dict) {
+  const subtitle = document.getElementById("sector-compare-subtitle");
+  const grid = document.getElementById("sector-compare-grid");
+  if (!subtitle || !grid) return;
+
+  const sectorName = currentLang === "ar" ? stock.sectorAr : stock.sectorEn;
+  subtitle.textContent = sectorName;
+
+  const sectorAvg = marketSummary.sectorAverages[stock.sectorAr];
+  grid.innerHTML = "";
+
+  if (!sectorAvg) {
+    const na = document.createElement("p");
+    na.className = "favorites-empty";
+    na.textContent = currentLang === "ar" ? "لا تتوفر بيانات متوسط القطاع لهذا القطاع بعد" : "Sector average data not available yet";
+    grid.appendChild(na);
+    return;
+  }
+
+  const rows = [
+    { key: "pe", label: currentLang === "ar" ? "مكرر الربحية (P/E)" : "P/E Ratio", stockVal: stock.metrics.pe, sectorVal: sectorAvg.pe, lowerIsBetter: true },
+    { key: "roe", label: currentLang === "ar" ? "العائد على حقوق الملكية" : "Return on Equity", stockVal: stock.metrics.roe, sectorVal: sectorAvg.roe, lowerIsBetter: false, suffix: "%" },
+    { key: "npm", label: currentLang === "ar" ? "هامش صافي الربح" : "Net Profit Margin", stockVal: stock.metrics.netProfitMargin, sectorVal: sectorAvg.npm, lowerIsBetter: false, suffix: "%" }
+  ];
+
+  rows.forEach(row => {
+    const item = document.createElement("div");
+    item.className = "sector-compare-item";
+
+    const isBetter = row.lowerIsBetter ? row.stockVal < row.sectorVal : row.stockVal > row.sectorVal;
+    const suffix = row.suffix || "";
+
+    item.innerHTML = `
+      <span class="sc-label">${row.label}</span>
+      <div class="sc-values">
+        <div class="sc-value-block">
+          <span class="sc-value-num ${isBetter ? 'sc-better' : 'sc-worse'}">${row.stockVal.toLocaleString(currentLang === 'ar' ? 'ar-SA' : 'en-US')}${suffix}</span>
+          <span class="sc-value-tag">${stock.symbol}</span>
+        </div>
+        <div class="sc-value-block">
+          <span class="sc-value-num sc-neutral">${row.sectorVal.toLocaleString(currentLang === 'ar' ? 'ar-SA' : 'en-US')}${suffix}</span>
+          <span class="sc-value-tag">${currentLang === "ar" ? "متوسط القطاع" : "Sector Avg"}</span>
+        </div>
+      </div>
+    `;
+    grid.appendChild(item);
+  });
+}
+
+// Compute a CAGR-style growth rate percentage between two positive values across N years
+function computeGrowthRate(startVal, endVal, years) {
+  if (startVal <= 0 || endVal <= 0) return null;
+  return (Math.pow(endVal / startVal, 1 / years) - 1) * 100;
+}
+
+// Render the PEG ratio panel (1-year and 3-year growth based)
+function renderPegPanel(stock, dict) {
+  const grid = document.getElementById("peg-grid");
+  if (!grid) return;
+  grid.innerHTML = "";
+
+  const epsHist = stock.metricsHistory && stock.metricsHistory.eps;
+  const currentPe = stock.metrics.pe;
+
+  if (!epsHist || epsHist.length < 5) {
+    grid.innerHTML = `<p class="favorites-empty">${currentLang === "ar" ? "بيانات غير كافية لحساب PEG" : "Not enough data to compute PEG"}</p>`;
+    return;
+  }
+
+  // eps array is ordered oldest -> newest (5 years), last index = most recent (current)
+  const last = epsHist.length - 1;
+  const growth1y = computeGrowthRate(epsHist[last - 1], epsHist[last], 1);
+  const growth3y = computeGrowthRate(epsHist[last - 3], epsHist[last], 3);
+
+  const peg1y = growth1y && growth1y > 0 ? currentPe / growth1y : null;
+  const peg3y = growth3y && growth3y > 0 ? currentPe / growth3y : null;
+
+  const buildPegCell = (label, growth, peg) => {
+    let statusClass = "sc-neutral";
+    let pegText = dict.peg_na;
+    if (peg !== null) {
+      pegText = peg.toFixed(2);
+      statusClass = peg < 1 ? "sc-better" : peg <= 2 ? "peg-fair" : "sc-worse";
+    }
+    const growthText = growth !== null
+      ? `${growth >= 0 ? "+" : ""}${growth.toFixed(1)}%`
+      : (currentLang === "ar" ? "غير متاح" : "N/A");
+
+    const cell = document.createElement("div");
+    cell.className = "peg-cell";
+    cell.innerHTML = `
+      <span class="peg-label">${label}</span>
+      <span class="peg-value ${statusClass}">${pegText}</span>
+      <span class="peg-growth">${currentLang === "ar" ? "نمو EPS: " : "EPS Growth: "}${growthText}</span>
+    `;
+    return cell;
+  };
+
+  grid.appendChild(buildPegCell(dict.peg_1y, growth1y, peg1y));
+  grid.appendChild(buildPegCell(dict.peg_3y, growth3y, peg3y));
+}
+
+// Render quarterly performance table with YoY comparison per matching quarter
+function renderQuarterlyCompareTable(stock, dict) {
+  const table = document.getElementById("quarterly-compare-table");
+  if (!table) return;
+  const thead = table.querySelector("thead");
+  const tbody = table.querySelector("tbody");
+  thead.innerHTML = "";
+  tbody.innerHTML = "";
+
+  const q = stock.quarterlyFinancials;
+  if (!q || q.quarters.length < 8) return; // needs at least 2 full years (8 quarters)
+
+  // Header row
+  const hRow = document.createElement("tr");
+  const thLabel = document.createElement("th");
+  thLabel.textContent = currentLang === "ar" ? "الربع" : "Quarter";
+  hRow.appendChild(thLabel);
+
+  ["revenues", "netIncome", "eps"].forEach(key => {
+    const th = document.createElement("th");
+    th.textContent = key === "revenues"
+      ? (currentLang === "ar" ? "الإيرادات (مليار)" : "Revenue (Bn)")
+      : key === "netIncome"
+      ? (currentLang === "ar" ? "صافي الدخل (مليار)" : "Net Income (Bn)")
+      : (currentLang === "ar" ? "ربحية السهم" : "EPS");
+    hRow.appendChild(th);
+
+    const thChange = document.createElement("th");
+    thChange.textContent = dict.yoy_change;
+    hRow.appendChild(thChange);
+  });
+  thead.appendChild(hRow);
+
+  // Only show the most recent 4 quarters, each compared to its matching quarter one year prior
+  const n = q.quarters.length;
+  const recentStart = n - 4; // index of most recent year's Q1
+
+  for (let i = recentStart; i < n; i++) {
+    const priorIdx = i - 4; // matching quarter, prior year
+    const row = document.createElement("tr");
+
+    const tdQ = document.createElement("td");
+    tdQ.textContent = q.quarters[i];
+    row.appendChild(tdQ);
+
+    ["revenues", "netIncome", "eps"].forEach(key => {
+      const currentVal = q[key][i];
+      const priorVal = q[key][priorIdx];
+
+      const tdVal = document.createElement("td");
+      tdVal.textContent = currentVal.toLocaleString(currentLang === 'ar' ? 'ar-SA' : 'en-US', {minimumFractionDigits: 2});
+      row.appendChild(tdVal);
+
+      const tdChange = document.createElement("td");
+      if (priorVal !== 0 && priorVal !== undefined) {
+        const pct = ((currentVal - priorVal) / Math.abs(priorVal)) * 100;
+        tdChange.textContent = `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
+        tdChange.className = pct >= 0 ? "change-positive" : "change-negative";
+      } else {
+        tdChange.textContent = "-";
+      }
+      row.appendChild(tdChange);
+    });
+
+    tbody.appendChild(row);
+  }
+}
+
 // Render dynamic metrics board grid
 function renderMetricsGrid(stock, dict) {
   const container = document.getElementById("metrics-container");
@@ -637,8 +844,19 @@ function renderMetricsGrid(stock, dict) {
     const icon = document.createElement("div");
     icon.className = "metric-icon-badge";
     icon.innerHTML = getMetricIconSvg(metricKey);
-    
+
+    const infoBtn = document.createElement("button");
+    infoBtn.type = "button";
+    infoBtn.className = "metric-info-btn";
+    infoBtn.setAttribute("aria-label", currentLang === "ar" ? "عرض التاريخ المالي لخمس سنوات" : "View 5-year history");
+    infoBtn.innerHTML = "ⓘ";
+    infoBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openMetricHistoryModal(stock, metricKey, dict);
+    });
+
     header.appendChild(nameCont);
+    header.appendChild(infoBtn);
     header.appendChild(icon);
     
     // Value row
@@ -742,15 +960,20 @@ function renderMetricsGrid(stock, dict) {
       compareStatus = "safe";
     }
     
-    // Sparkline mock trends
+    // Sparkline trend using real 5-year historical data
     const sparkline = document.createElement("div");
     sparkline.className = "sparkline-container";
-    
-    // Generate simulated heights for 5 intervals (years)
-    let mockTrend = [45, 60, 52, 70, 90];
-    if (metricKey === "pe") mockTrend = [80, 75, 95, 65, 50];
-    if (metricKey === "debtToAssets") mockTrend = [20, 25, 23, 21, 18];
-    if (stock.symbol === "2082" && metricKey === "freeCashFlow") mockTrend = [20, 10, -5, -20, -35]; // Acwa power negative cash trends
+
+    const histSeries = stock.metricsHistory && stock.metricsHistory[metricKey];
+    let mockTrend;
+    if (histSeries && histSeries.length > 0) {
+      // Normalize the real values to a 0-100 height range for the sparkline bars
+      const maxAbs = Math.max(...histSeries.map(v => Math.abs(v)), 1);
+      mockTrend = histSeries.map(v => Math.round((v / maxAbs) * 100));
+    } else {
+      // Fallback if no historical series exists for this metric
+      mockTrend = [45, 60, 52, 70, 90];
+    }
     
     mockTrend.forEach(heightPercent => {
       const bar = document.createElement("div");
@@ -802,6 +1025,118 @@ function renderMetricsGrid(stock, dict) {
     
     container.appendChild(card);
   });
+}
+
+// Track the Chart.js instance used inside the metric-history modal
+let metricModalChart = null;
+
+// Open the metric history popup: shows a 5-year trend chart + table with YoY % change
+function openMetricHistoryModal(stock, metricKey, dict) {
+  const overlay = document.getElementById("metric-modal-overlay");
+  const titleEl = document.getElementById("metric-modal-title");
+  const table = document.getElementById("metric-modal-table");
+  const thead = table.querySelector("thead");
+  const tbody = table.querySelector("tbody");
+
+  const series = stock.metricsHistory && stock.metricsHistory[metricKey];
+  const years = stock.metricsHistory && stock.metricsHistory.years;
+  const metricName = dict[metricKey] ? dict[metricKey].name : metricKey;
+
+  titleEl.textContent = `${metricName} — ${currentLang === "ar" ? stock.nameAr : stock.nameEn} — ${dict.metric_history_title}`;
+
+  if (!series || !years) {
+    thead.innerHTML = "";
+    tbody.innerHTML = `<tr><td>${currentLang === "ar" ? "لا تتوفر بيانات تاريخية لهذا المؤشر" : "No historical data available for this metric"}</td></tr>`;
+    overlay.style.display = "flex";
+    return;
+  }
+
+  // Build table: years header + values row + YoY % change row
+  thead.innerHTML = "";
+  const hRow = document.createElement("tr");
+  const thLabel = document.createElement("th");
+  thLabel.textContent = metricName;
+  hRow.appendChild(thLabel);
+  years.forEach(y => {
+    const th = document.createElement("th");
+    th.textContent = y;
+    hRow.appendChild(th);
+  });
+  thead.appendChild(hRow);
+
+  tbody.innerHTML = "";
+  const valRow = document.createElement("tr");
+  const valLabel = document.createElement("td");
+  valLabel.textContent = currentLang === "ar" ? "القيمة" : "Value";
+  valRow.appendChild(valLabel);
+  series.forEach(v => {
+    const td = document.createElement("td");
+    td.textContent = v.toLocaleString(currentLang === 'ar' ? 'ar-SA' : 'en-US', {minimumFractionDigits: 2});
+    valRow.appendChild(td);
+  });
+  tbody.appendChild(valRow);
+
+  const changeRow = document.createElement("tr");
+  const changeLabel = document.createElement("td");
+  changeLabel.textContent = dict.yoy_change;
+  changeRow.appendChild(changeLabel);
+  series.forEach((v, i) => {
+    const td = document.createElement("td");
+    if (i === 0) {
+      td.textContent = "-";
+    } else {
+      const prev = series[i - 1];
+      if (prev !== 0) {
+        const pct = ((v - prev) / Math.abs(prev)) * 100;
+        td.textContent = `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
+        td.className = pct >= 0 ? "change-positive" : "change-negative";
+      } else {
+        td.textContent = "-";
+      }
+    }
+    changeRow.appendChild(td);
+  });
+  tbody.appendChild(changeRow);
+
+  // Draw the trend chart
+  const ctx = document.getElementById("metricHistoryChart").getContext("2d");
+  if (metricModalChart) {
+    metricModalChart.destroy();
+  }
+  metricModalChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: years,
+      datasets: [{
+        label: metricName,
+        data: series,
+        borderColor: "#00875A",
+        backgroundColor: "rgba(0, 135, 90, 0.12)",
+        borderWidth: 2,
+        tension: 0.3,
+        fill: true,
+        pointRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: { grid: { color: "#F1F5F9" } },
+        x: { grid: { display: false } }
+      },
+      plugins: {
+        legend: { display: false }
+      }
+    }
+  });
+
+  overlay.style.display = "flex";
+}
+
+function closeMetricHistoryModal() {
+  const overlay = document.getElementById("metric-modal-overlay");
+  overlay.style.display = "none";
 }
 
 // Return Inline SVGs for metric card icons
@@ -863,6 +1198,34 @@ function renderHistoryTable(stock, dict) {
     });
     
     tbody.appendChild(row);
+
+    // Secondary row: year-over-year % change for this financial line
+    const changeRow = document.createElement("tr");
+    changeRow.className = "yoy-row";
+    const tdChangeLabel = document.createElement("td");
+    tdChangeLabel.textContent = dict.yoy_change;
+    tdChangeLabel.className = "yoy-label";
+    changeRow.appendChild(tdChangeLabel);
+
+    values.forEach((val, i) => {
+      const td = document.createElement("td");
+      if (i === 0) {
+        td.textContent = "-";
+        td.className = "yoy-label";
+      } else {
+        const prev = values[i - 1];
+        if (prev !== 0) {
+          const pct = ((val - prev) / Math.abs(prev)) * 100;
+          td.textContent = `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
+          td.className = pct >= 0 ? "change-positive" : "change-negative";
+        } else {
+          td.textContent = "-";
+        }
+      }
+      changeRow.appendChild(td);
+    });
+
+    tbody.appendChild(changeRow);
   });
 }
 
@@ -1113,6 +1476,18 @@ function renderCompanyNewsList(stock) {
     
     div.appendChild(meta);
     div.appendChild(title);
+
+    if (item.url) {
+      const link = document.createElement("a");
+      link.className = "news-source-link";
+      link.href = item.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.innerHTML = (currentLang === "ar" ? "زيارة المصدر" : "Visit source") +
+        ' <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>';
+      div.appendChild(link);
+    }
+
     container.appendChild(div);
   });
 }
